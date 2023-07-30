@@ -25,11 +25,6 @@ From PyPiTest:
 pip install -i https://test.pypi.org/simple/ wms-scraper
 ```
 
-From sources, in development mode:
-```bash
-pip install -e .
-```
-
 
 **Troubleshooting GDAL**
 
@@ -56,22 +51,23 @@ Usage: scrapwms [OPTIONS] LAYER OUTPUT
 
   LAYER: Name of the WM(T)S layer to scrap.
 
-  OUTPUT: Path to the GeoTiff file to create. Note that the outputed file will be of the form `{output}.{clipping}[_{region}].tif` where:
-      - `clipping` is the name of the method used to define the regions,
-      either "grid", "bbox" or "sheetfile";
-      - `region` is the index of the corresponding region when clipping
-      multiple regions with a grid or a sheetfile.
+  OUTPUT: Path to the GeoTiff file to create.
+          The file name will be `{output}.{clipping}[_{region}].tif` where:
+              - `clipping` is the name of the clipping method, either "grid",
+              "bbox" or "sheetfile";
+              - `region` is the index of the corresponding region
+                  when clipping multiple regions with a grid or a sheetfile.
 
 Options:
   --wms TEXT                  WMS endpoint URL. For instance
                               `https://wms.openstreetmap.fr/wms`.
   --grid FILENAME             A GEOJSON grid of regions with bboxes as
                               properties `{'left': xmin, 'bottom': ymin,
-                              'right': xmax, 'top': ymax}`.  NOTE: this
+                              'right': xmax, 'top': ymax}`. NOTE: this
                               argument is mutually exclusive with --bbox and
                               --sheetfile.
   --bbox TEXT                 A bounding box formatted as
-                              `xmin,ymin,xmax,ymax`.  NOTE: this argument is
+                              `xmin,ymin,xmax,ymax`. NOTE: this argument is
                               mutually exclusive with --grid and --sheetfile.
   --sheetfile FILENAME        A GEOJSON file containing bounding boxes
                               geometries. See also --sheetnumber and
@@ -83,8 +79,8 @@ Options:
   -r, --resolution FLOAT      Resolution of the extracted images, in pixels
                               per map unit. Defaults to 1.0px/mu. Map units
                               depends on the CRS (see --crs).
-  --wmts                      Use WMTS.
   --crs TEXT                  Coordinate reference system, e.g. EPSG:3857.
+  --wmts                      Use WMTS instead of WMS.
   -v, --verbose               Verbose mode
   -q, --quiet                 Quiet mode
   --help                      Show this message and exit.
