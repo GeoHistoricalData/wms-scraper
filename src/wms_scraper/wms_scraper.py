@@ -22,11 +22,13 @@ from osgeo_utils import gdal_merge
 from osgeo import gdal
 import colorlog
 
-DEBUG = False
+DEBUG = True
 
 
 handler = colorlog.StreamHandler()
-handler.setFormatter(colorlog.ColoredFormatter("%(log_color)s%(levelname)s:%(message)s"))
+handler.setFormatter(
+    colorlog.ColoredFormatter("%(log_color)s%(levelname)s:%(message)s")
+)
 
 if DEBUG:
     logger = colorlog.getLogger("console")
@@ -66,7 +68,9 @@ class Tile:
 
     def pixel_size(self) -> tuple[float]:
         w, h = self.image_dims()
-        return w / (self.bbox_mu[2] - self.bbox_mu[0]), h / (self.bbox_mu[3] - self.bbox_mu[1])
+        return w / (self.bbox_mu[2] - self.bbox_mu[0]), h / (
+            self.bbox_mu[3] - self.bbox_mu[1]
+        )
 
     def geotransform(self) -> np.array:
         flip = -1 if self._flipped_yaxis else 1
@@ -77,7 +81,9 @@ class Tile:
             [self.bbox_px[0], flip * self.bbox_px[3]],  # Lower-left corner
         ]
         vars = np.pad(points_img, ((0, 0), (1, 0)), constant_values=1)
-        A = np.vstack([np.pad(vars, ((0, 0), (0, 3))), np.pad(vars, ((0, 0), (3, 0)))])
+        A = np.vstack(
+            [np.pad(vars, ((0, 0), (0, 3))), np.pad(vars, ((0, 0), (3, 0)))]
+        )
         B = [
             self.bbox_mu[0],
             self.bbox_mu[2],
@@ -95,8 +101,9 @@ def compute_tilemosaic(bbox: Iterable[float], resolution: int) -> list[Tile]:
     desired_width_px = math.ceil((xmax - xmin) * resolution)
     desired_height_px = math.ceil((ymax - ymin) * resolution)
 
-    # If the requested resolution causes the maximum dimensions defined by X and Y to be exceeded,
-    # the region is divided into a set of tiles of the largest possible size.
+    # If the requested resolution causes the maximum dimensions
+    # defined by X and Y to be exceeded, the region is divided into a
+    # set of tiles of the largest possible size.
     if desired_width_px > MAX_TILE_WIDTH_IN_PIXELS:
         tiles_count = desired_width_px // MAX_TILE_WIDTH_IN_PIXELS
         widths_px = [MAX_TILE_WIDTH_IN_PIXELS] * tiles_count
@@ -125,7 +132,11 @@ def compute_tilemosaic(bbox: Iterable[float], resolution: int) -> list[Tile]:
             # width and heights of each tiles, in pixels
             [(w, h) for h in heights_px for w in widths_px],
             # Cumulative width and heights of each tiles, in map units
-            [(wmu, hmu) for hmu in itertools.accumulate(heights_mu) for wmu in itertools.accumulate(widths_mu)],
+            [
+                (wmu, hmu)
+                for hmu in itertools.accumulate(heights_mu)
+                for wmu in itertools.accumulate(widths_mu)
+            ],
             # Width and heights of each tiles, in pixels, in map u
             [(wmu, hmu) for hmu in heights_mu for wmu in widths_mu],
         )
@@ -192,20 +203,24 @@ class WMS:
             "height": h,
         }
         params = self.base_options | opts | {"REQUEST": "GetMap"}
-        async with self._session.get(self.endpoint, params=params, raise_for_status=True) as resp:
+        async with self._session.get(
+            self.endpoint, params=params, raise_for_status=True
+        ) as resp:
             assert resp.status == 200
             bytes_content = await resp.content.read(-1)
             return bytes_content
 
     async def __aenter__(self) -> "WMS":
-        self._session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=5))
+        self._session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(limit=5)
+        )
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         if self._session:
             await self._session.close()
             # Prevent `ResourceWarning: unclosed transport`
-            # See https://docs.aiohttp.org/en/stable/client_advanced.html#graceful-shutdown
+            # See https://docs.aiohttp.org/en/stable/client_advanced.html#graceful-shutdown # noqa
             await asyncio.sleep(0.250)
 
 
@@ -216,7 +231,8 @@ class WMSError(Exception):
 
 
 def get_wms_baseurl(wms_url: str) -> str:
-    """Given any URL to a WMS, returns its base URL, i.e. the URL without any query, parameter or fragment."""
+    """Given any URL to a WMS, returns its base URL,
+    i.e. the URL without any query, parameter or fragment."""
     return urllib.parse.urljoin(wms_url, urllib.parse.urlparse(wms_url).path)
 
 
@@ -237,15 +253,18 @@ async def download_tile(
     try:
         tileimage = Image.open(BytesIO(data))
     except PIL.UnidentifiedImageError as e:
-        # The WMS may return a http status 200 with an XML error if a WMS parameter was invalid.
-        # In such case the data retrieved from getmap() is not a valid image but a byte-encoded XML error.
+        # The WMS may return a XML error if a WMS parameter was invalid.
+        # In such case the data retrieved from getmap() is not a valid image
+        # but a byte-encoded XML error.
         raise WMSError(data.decode()) from e
 
     format = wms_params.get("format").rpartition("/")[-1] or "jpeg"
 
     should_skip = skip_blank_tiles and is_image_blank(tileimage)
     if not should_skip:
-        wf_path = "{}/{}.{}".format(output_dir, tileid, get_worldfile_ext(format))
+        wf_path = "{}/{}.{}".format(
+            output_dir, tileid, get_worldfile_ext(format)
+        )
         im_path = "{}/{}.{}".format(output_dir, tileid, format)
 
         with open(wf_path, "w") as wf:
@@ -261,7 +280,9 @@ async def download_tile(
         return im_path
 
 
-async def download_tilemosaic(wms: WMS, tiles: list[Tile], output_dir: str, **wms_params: Any) -> Iterable[str]:
+async def download_tilemosaic(
+    wms: WMS, tiles: list[Tile], output_dir: str, **wms_params: Any
+) -> Iterable[str]:
     # Enables async http calls in the WMS client.
     async with wms as async_wms:
         tasks = set()
@@ -300,9 +321,11 @@ def get_worldfile(tile: Tile) -> str:
         g[4],  # D. y-skew
         g[2],  # B. x-swew
         g[5],  # E. y-scale
-        # C. x coordinate of the center of the image's upper-left pixel, in map units
+        # C. x coordinate of the center of the image's upper-left pixel
+        # in map units
         ul_mapunits[0] + g[1] / 2,
-        # F. y coordinate of the center of the image's upper-left pixel, in map units
+        # F. y coordinate of the center of the image's upper-left pixel
+        # in map units
         ul_mapunits[1] + g[5] / 2,
     ]
     return "\n".join(map(str, parameters))
@@ -327,14 +350,17 @@ def parse_bbox(ctx, param, value: str) -> list[float]:
             return bbox_
     except (AssertionError, AttributeError, ValueError) as e:
         raise click.exceptions.BadParameter(
-            f"`{value}` is not a valid BBOX. Expected xmin,ymin,xmax,ymax to be a list of 4 comma-separated floats or integers.",
+            f"`{value}` is not a valid BBOX."
+            "Expected xmin,ymin,xmax,ymax"
+            "to be a list of 4 comma-separated numbers.",
             ctx,
             param,
         ) from e
 
 
 def process_bbox(bbox: list[float]) -> list[list[float]]:
-    """Simply wraps the bbox in a list, for compatibility with process_sheetfile() and process_grid()."""
+    """Simply wraps a bbox in a list
+    For compatibility with process_sheetfile() and process_grid()."""
     return [bbox]
 
 
@@ -345,21 +371,36 @@ def bbox_from_geojson_feature(feature: dict) -> list[float]:
     return [xs.min(), ys.min(), xs.max(), ys.max()]
 
 
-def process_sheetfile(sheetfile: str, sheetnumber: int, sheetnumbername: str) -> list[list[float]]:
-    """Reads and filter a GeoJSON sheetfile to return the BBOXes for the requested sheetnumber."""
+def process_sheetfile(
+    sheetfile: str, sheetnumber: int, sheetnumbername: str
+) -> list[list[float]]:
+    """Reads and filters a GeoJSON sheetfile
+    and returns the BBOXes for the requested sheetnumber."""
     sheets = geojson.load(sheetfile)["features"]
     if len(sheets) == 0:
         warnings.warn(f"No sheet found in {sheetfile}.", UserWarning)
     else:
         if not sheets[0]["properties"].get(sheetnumbername):
-            raise ValueError(f"Property {sheetnumbername} not found in sheet features.")
+            raise ValueError(
+                f"Property {sheetnumbername} not found in sheet features."
+            )
 
-    selected = list(filter(lambda f: f["properties"][sheetnumbername] == sheetnumber, sheets))
+    selected = list(
+        filter(
+            lambda f: f["properties"][sheetnumbername] == sheetnumber, sheets
+        )
+    )
 
     if not selected:
-        warnings.warn(f"No sheet matching {sheetnumbername} = {sheetnumber}.", UserWarning)
+        warnings.warn(
+            f"No sheet matching {sheetnumbername} = {sheetnumber}.",
+            UserWarning,
+        )
     elif len(selected) > 1:
-        msg = f"Warning. {len(selected)} sheets found with number {sheetnumber}. Each will be processed as a separate region."
+        msg = (
+            f"{len(selected)} sheets found with number {sheetnumber}.",
+            "Each will be processed as a separate region.",
+        )
         warnings.warn(msg, UserWarning)
 
     return [bbox_from_geojson_feature(f) for f in selected]
@@ -382,7 +423,8 @@ def process_grid(grid_file: str) -> list[list[float]]:
             bboxes.append(clean)
         except (TypeError, AssertionError) as e:
             raise ValueError(
-                "Expected a grid cell with 4 bbox float coordinates `left`, `bottom`, `right` and `top`but got %s"
+                "Expected a grid cell with 4 bbox float coordinates"
+                " `left`, `bottom`, `right` and `top`but got %s"
                 % c["properties"]
             ) from e
     return bboxes
@@ -394,7 +436,8 @@ def process_grid(grid_file: str) -> list[list[float]]:
 
 
 class CLIPPING_METHOD(enum.Enum):
-    # Keep strategies in order of precedence. Top takes precedence over the other.
+    # Keep strategies in order of precedence.
+    # Top takes precedence over the other.
     BBOX = auto()
     SHEETFILE = auto()
     GRID = auto()
@@ -412,22 +455,32 @@ def build_output_file_name(fname: str, *suffixes: Iterable[str]) -> str:
 
 @click.command()
 @click.argument("layer")
-@click.argument("output", type=click.Path(file_okay=True, dir_okay=True, writable=True))
-@click.option("--wms", help="WMS endpoint URL. For instance `https://wms.openstreetmap.fr/wms`.")
+@click.argument(
+    "output", type=click.Path(file_okay=True, dir_okay=True, writable=True)
+)
+@click.option(
+    "--wms",
+    help="WMS endpoint URL. For instance `https://wms.openstreetmap.fr/wms`.",
+)
 @click.option(
     "--grid",
-    help="A GEOJSON grid of regions with bboxes as properties `{'left': xmin, 'bottom': ymin, 'right': xmax, 'top': ymax}`.  NOTE: this argument is mutually exclusive with --bbox and --sheetfile.",
+    help="""A GEOJSON grid of regions with bboxes as properties
+    `{'left': xmin, 'bottom': ymin, 'right': xmax, 'top': ymax}`.
+    NOTE: this argument is mutually exclusive with --bbox and --sheetfile.""",
     type=click.File("rb", lazy=True),
 )
 @click.option(
     "--bbox",
-    help="A bounding box formatted as `xmin,ymin,xmax,ymax`.  NOTE: this argument is mutually exclusive with --grid and --sheetfile.",
+    help="""A bounding box formatted as `xmin,ymin,xmax,ymax`.
+    NOTE: this argument is mutually exclusive with --grid and --sheetfile.""",
     type=str,
     callback=parse_bbox,
 )
 @click.option(
     "--sheetfile",
-    help="A GEOJSON file containing bounding boxes geometries. See also --sheetnumber and --sheetnumbername. NOTE: this argument is mutually exclusive with --grid and --bbox.",
+    help="""A GEOJSON file containing bounding boxes geometries.
+    See also --sheetnumber and --sheetnumbername.
+    NOTE: this argument is mutually exclusive with --grid and --bbox.""",
     type=click.File("rb", lazy=True),
 )
 @click.option(
@@ -444,16 +497,21 @@ def build_output_file_name(fname: str, *suffixes: Iterable[str]) -> str:
 @click.option(
     "--resolution",
     "-r",
-    help="Resolution of the extracted images, in pixels per map unit. Defaults to 1.0px/mu. Map units depends on the CRS (see --crs).",
+    help="""Resolution of the extracted images, in pixels per map unit.
+    Defaults to 1.0px/mu. Map units depends on the CRS (see --crs).""",
     default=1.0,
 )
-@click.option("--wmts", help="Use WMTS.", is_flag=True, default=False)
 @click.option(
     "--crs",
     help="Coordinate reference system, e.g. EPSG:3857.",
     default="EPSG:4326",
 )
-@click.option("--verbose", "-v", help="Verbose mode", is_flag=True, default=False)
+@click.option(
+    "--wmts", help="Use WMTS instead of WMS.", is_flag=True, default=False
+)
+@click.option(
+    "--verbose", "-v", help="Verbose mode", is_flag=True, default=False
+)
 @click.option("--quiet", "-q", help="Quiet mode", is_flag=True, default=False)
 def cli_main(
     layer: str,
@@ -473,9 +531,13 @@ def cli_main(
     """
     LAYER: Name of the WM(T)S layer to scrap.
 
-    OUTPUT: Path to the GeoTiff file to create. Note that the outputed file will be of the form `{output}.{clipping}[_{region}].tif` where:\n
-        - `clipping` is the name of the method used to define the regions, either "grid", "bbox" or "sheetfile";\n
-        - `region` is the index of the corresponding region when clipping multiple regions with a grid or a sheetfile.
+    \b
+    OUTPUT: Path to the GeoTiff file to create.
+            The file name will be `{output}.{clipping}[_{region}].tif` where:
+                - `clipping` is the name of the clipping method, either "grid",
+                "bbox" or "sheetfile";
+                - `region` is the index of the corresponding region
+                    when clipping multiple regions with a grid or a sheetfile.
     """
 
     if quiet:
@@ -499,44 +561,64 @@ def cli_main(
     }
 
     if any(input_clipping_opts.values()):
-        input_clipping_opts = {k: v for k, v in input_clipping_opts.items() if v}
-        input_clipping_opts = sorted(input_clipping_opts, key=lambda m: m.value)
+        input_clipping_opts = {
+            k: v for k, v in input_clipping_opts.items() if v
+        }
+        input_clipping_opts = sorted(
+            input_clipping_opts, key=lambda m: m.value
+        )
         selected_clipping = input_clipping_opts[0]
     else:
         msg = "Expected at least one of --sheetfile, --grid or --bbox."
         raise click.BadArgumentUsage(msg)
 
     if len(input_clipping_opts) > 1:
-        msg = "Setting a region to download with {} at the same time is not possible. Method {} will take precedence.".format(
-            " and ".join(map(str, input_clipping_opts)), input_clipping_opts[0]
+        msg = (
+            "Setting a region to download with {}"
+            "at the same time is not possible."
+            "Method {} will take precedence.".format(
+                " and ".join(map(str, input_clipping_opts)),
+                input_clipping_opts[0],
+            )
         )
         warnings.warn(msg, UserWarning)
 
     # The method SHEETFILE requires options --sheetnumber and -sheetnumbername.
     if selected_clipping == CLIPPING_METHOD.SHEETFILE:
         if not (sheetnumber and sheetnumbername):
-            msg = "--sheetfile requires --sheetnumber and --sheetnumbername to be set."
+            msg = (
+                "--sheetfile requires --sheetnumber"
+                " and --sheetnumbername to be set."
+            )
             raise click.BadArgumentUsage(msg)
 
     # Check that --wms is an actual WM(T)S endpoint.
-    # This is done by checking that the server responds to the GetCapabilities request.
-    # If so, a WMS helper object is built to provide a basic API for later queries.
+    # This is done by checking that the server provides WMS Capabilities.
+    # A WMS helper object is built to provide a basic API for later queries.
     baseurl = get_wms_baseurl(wms)
     try:
         wms_obj = WMS(baseurl, is_wmts=wmts)
         wms_obj.getCapabilities()
     except requests.exceptions.RequestException as exc:
-        raise click.exceptions.BadParameter(f"Invalid WMS URL `{baseurl}`") from exc
+        raise click.exceptions.BadParameter(
+            f"Invalid WMS URL `{baseurl}`"
+        ) from exc
 
     if verbose:
-        logger.info("Endpoint: %s (WMTS=%s)" % (wms_obj.endpoint, wms_obj.is_wmts))
+        logger.info(
+            "Endpoint: %s (WMTS=%s)" % (wms_obj.endpoint, wms_obj.is_wmts)
+        )
         logger.info("Selected clipping method: %s" % selected_clipping.name)
     # ------------
     # Step 1: resolve the tiles to download
     # ------------
 
-    # The chosen clipping method gives one or several regions of the served map to dowload.
-    # For each region a set of tiles is prepared. The number of tile depends on the region extent,the requested resolution, and the constraints on the tiles dimensions (See MAX_TILE_[WIDTH|HEIGHT]_IN_PIXELS).
+    # For each region a set of tiles is prepared.
+    # The number of tile depends on:
+    #   - the region extent
+    #   - the requested resolution
+    #   - the constraints on the tiles dimensions
+    #      See MAX_TILE_[WIDTH|HEIGHT]_IN_PIXELS.
     if selected_clipping == CLIPPING_METHOD.BBOX:
         # 1 region
         bboxes = process_bbox(bbox)
@@ -550,23 +632,35 @@ def cli_main(
         bboxes = process_grid(grid)
         region_names = list(range(1, len(bboxes) + 1))
     else:
-        raise NotImplementedError(f"{selected_clipping} is not yet implemented")
+        raise NotImplementedError(
+            f"{selected_clipping} is not yet implemented"
+        )
 
     regions = [compute_tilemosaic(b, resolution) for b in bboxes]
 
     # ------------
-    # Step 2: fetch the tiles and merge all tiles in each region into a single geotif
+    # Step 2: fetch the tiles and merge all tiles in each region
+    #         into a single GeoTiff
     # ------------
     loop = asyncio.get_event_loop_policy().get_event_loop()
     for ix, mosaic in enumerate(regions):
         with tempfile.TemporaryDirectory() as odir:
             if verbose:
-                logger.info("Downloading %i tiles in region %s." % (len(mosaic), region_names[ix] or layer))
+                logger.info(
+                    "Downloading %i tiles in region %s."
+                    % (len(mosaic), region_names[ix] or layer)
+                )
 
-            r = loop.run_until_complete(download_tilemosaic(wms_obj, mosaic, odir, crs=crs, layers=layer))
+            r = loop.run_until_complete(
+                download_tilemosaic(
+                    wms_obj, mosaic, odir, crs=crs, layers=layer
+                )
+            )
 
             ofile = build_output_file_name(
-                output, selected_clipping.__str__().lower(), region_names[ix].__str__().lower()
+                output,
+                selected_clipping.__str__().lower(),
+                region_names[ix].__str__().lower(),
             )
             if not r:
                 warnings.warn(f"No tile to build {ofile}.")
@@ -584,7 +678,8 @@ def cli_main(
 
                 if verbose:
                     logger.info(
-                        "Ready to write region %i to %s with GDAL parameters `%s`" % (ix, ofile, " ".join(parameters))
+                        "Writing region %i to %s with GDAL parameters `%s`"
+                        % (ix, ofile, " ".join(parameters))
                     )
 
                 gdal_merge.main(parameters + r)
