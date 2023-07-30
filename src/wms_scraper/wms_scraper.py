@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Any
+from typing import Any, Iterable
 import numpy as np
 import tempfile
 import warnings
@@ -57,7 +57,7 @@ class Tile:
         assert len(self.bbox_mu) == 4
         assert len(self.bbox_px) == 4
 
-    def to_string(self, bbox: str = "mu"):
+    def to_string(self, bbox: str = "mu") -> str:
         b = self.bbox_mu if bbox == "mu" else self.bbox_px
         return ",".join(str(_) for _ in b)
 
@@ -68,7 +68,7 @@ class Tile:
         w, h = self.image_dims()
         return w / (self.bbox_mu[2] - self.bbox_mu[0]), h / (self.bbox_mu[3] - self.bbox_mu[1])
 
-    def geotransform(self):
+    def geotransform(self) -> np.array:
         flip = -1 if self._flipped_yaxis else 1
         # 3 non-colinear points are enough to compute the transform
         points_img = [
@@ -90,7 +90,7 @@ class Tile:
         return np.linalg.solve(A, B)
 
 
-def compute_tilemosaic(bbox: list[float], resolution: int) -> list[Tile]:
+def compute_tilemosaic(bbox: Iterable[float], resolution: int) -> list[Tile]:
     xmin, ymin, xmax, ymax = bbox
     desired_width_px = math.ceil((xmax - xmin) * resolution)
     desired_height_px = math.ceil((ymax - ymin) * resolution)
@@ -175,7 +175,7 @@ class WMS:
         if self.is_wmts:
             self.base_options = DEFAULT_WMTS_OPTIONS.copy()
 
-    def getCapabilities(self):
+    def getCapabilities(self) -> str:
         if not self._cached_capabilities:
             # Synthax is Python >= 3.9 only
             params = self.base_options | {"REQUEST": "GetCapabilities"}
@@ -184,7 +184,7 @@ class WMS:
             self._cached_capabilities = response.content
         return self._cached_capabilities
 
-    async def getmap_async(self, tile: Tile, **wms_params):
+    async def getmap_async(self, tile: Tile, **wms_params: Any) -> bytes:
         w, h = tile.image_dims()
         opts = wms_params | {
             "bbox": tile.to_string(),
@@ -210,7 +210,7 @@ class WMS:
 
 
 class WMSError(Exception):
-    def __init__(self, xmlerr):
+    def __init__(self, xmlerr: str):
         self.message = xmlerr
         super().__init__(self.message)
 
@@ -231,8 +231,8 @@ async def download_tile(
     output_dir: str,
     tileid: int = 0,
     skip_blank_tiles=False,
-    **wms_params,
-):
+    **wms_params: Any,
+) -> str:
     data = await wms.getmap_async(tile, **wms_params)
     try:
         tileimage = Image.open(BytesIO(data))
@@ -261,7 +261,7 @@ async def download_tile(
         return im_path
 
 
-async def download_tilemosaic(wms: WMS, tiles: list[Tile], output_dir: str, **wms_params: dict[Any]):
+async def download_tilemosaic(wms: WMS, tiles: list[Tile], output_dir: str, **wms_params: Any) -> Iterable[str]:
     # Enables async http calls in the WMS client.
     async with wms as async_wms:
         tasks = set()
@@ -338,7 +338,7 @@ def process_bbox(bbox: list[float]) -> list[list[float]]:
     return [bbox]
 
 
-def bbox_from_geojson_feature(feature):
+def bbox_from_geojson_feature(feature: dict) -> list[float]:
     coords = np.array(list(geojson.coords(feature)))
     xs = coords[:, 0]
     ys = coords[:, 1]
@@ -403,7 +403,7 @@ class CLIPPING_METHOD(enum.Enum):
         return self.name
 
 
-def build_output_file_name(fname, *suffixes):
+def build_output_file_name(fname: str, *suffixes: Iterable[str]) -> str:
     prefix_str = fname.rpartition(".")[0]
     suffix_str = '_'.join(suffixes)
     ext = "tif"
@@ -457,10 +457,10 @@ def build_output_file_name(fname, *suffixes):
 @click.option("--quiet", "-q", help="Quiet mode", is_flag=True, default=False)
 def cli_main(
     layer: str,
-    output,
+    output: click.utils.LazyFile,
     wms: str,
-    grid,
-    sheetfile,
+    grid: click.utils.LazyFile,
+    sheetfile: click.utils.LazyFile,
     bbox: list[float],
     sheetnumbername: str,
     sheetnumber: int,
@@ -590,7 +590,7 @@ def cli_main(
                 gdal_merge.main(parameters + r)
 
 
-def entrypoint():
+def entrypoint() -> None:
     warnings.filterwarnings("error")
     if DEBUG:
         try:
